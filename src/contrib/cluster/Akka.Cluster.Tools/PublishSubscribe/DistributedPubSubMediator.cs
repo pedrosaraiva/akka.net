@@ -439,11 +439,15 @@ namespace Akka.Cluster.Tools.PublishSubscribe
 
                 if (!(excludeSelf && address == _cluster.SelfAddress))
                 {
-                    var valueHolder = bucket.Content[path];
-                    if (valueHolder != null && !valueHolder.Ref.Equals(ActorRefs.Nobody))
+                    ValueHolder valueHolder = null;
+                    if (bucket.Content.TryGetValue(path, out valueHolder) && valueHolder != null)
                     {
-                        valueHolder.Ref.Forward(message);
+                        if (!valueHolder.Ref.Equals(ActorRefs.Nobody))
+                        {
+                            valueHolder.Ref.Forward(message);
+                        }
                     }
+
                 }
             }
         }
@@ -478,10 +482,11 @@ namespace Akka.Cluster.Tools.PublishSubscribe
 
         private void HandlePrune()
         {
-            foreach (var entry in _registry)
+            List<Address> keys = new List<Address>(_registry.Keys);
+            foreach (var key in keys)
             {
-                var owner = entry.Key;
-                var bucket = entry.Value;
+                var owner = key;
+                var bucket = _registry[key];
 
                 var oldRemoved = bucket.Content
                     .Where(kv => (bucket.Version - kv.Value.Version) > _settings.RemovedTimeToLive.TotalMilliseconds)
@@ -489,7 +494,7 @@ namespace Akka.Cluster.Tools.PublishSubscribe
 
                 if (oldRemoved.Any())
                 {
-                    _registry.Add(owner, new Bucket(bucket.Owner, bucket.Version, bucket.Content.RemoveRange(oldRemoved)));
+                    _registry[owner] = new Bucket(bucket.Owner, bucket.Version, bucket.Content.RemoveRange(oldRemoved));
                 }
             }
         }
